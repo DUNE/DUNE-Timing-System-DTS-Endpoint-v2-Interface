@@ -1,0 +1,8 @@
+{signal: [
+  {name: 'clk', wave: 'x.p..|.........'},
+  {name: 'rst', wave: '1..0.|.........'},
+  {name: 'ready', wave: 'x..0.|.1.......'},
+  {name: 'tstamp', wave:'x....|222222222'},
+  {name: 'sync', wave:'xxxxx|xxx2xxx2x'},
+  {name: 'sync_stb', wave:'xxx0.|...10..10'}]
+}

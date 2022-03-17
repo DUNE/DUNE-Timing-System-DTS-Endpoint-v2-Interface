@@ -1,0 +1,9 @@
+{signal: [
+  {name: 'clk', wave: 'p............'},
+  {name: 'a', wave: 'x2...2x22..x.'},
+  {name: 'd', wave: 'x....2xx2..x.'},
+  {name: 'rw', wave: 'x0...1x01..x.'},
+  {name: 'stb', wave: '01...1011..0.'},
+  {name: 'ack', wave: '0...11010.10.'},
+  {name: 'd (slv)', wave: 'x...2x.2x....'}
+]}

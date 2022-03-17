@@ -79,7 +79,7 @@ entity pdts_endpoint is
 
 \section{Block Diagram of Endpoint and Host Firmware}
 
-\includegraphics[width=1\textwidth]{dts_endpoint_block_diagram.png}
+\includegraphics[width=1\textwidth]{endpoint_structure.pdf}
 
 
 \section{General Notes}
@@ -271,9 +271,22 @@ A simple two-stage handshake is used between master and slave:
 \textbf{stb} must be asserted until \textbf{ack} is asserted, and de-asserted on the cycle following this unless a new transaction is begun. Slaves are allowed to permanently assert \textbf{ack} if it is guaranteed that all read and write operations are completed in a single cycle. Address decoding and slave return data mutiplexing is the responsibility of the host firmware if the control bus is used. A timing diagram is shown below, illustrating four successive transactions: (a) a read cycle with wait states, (b) a write cycle with no wait state, (c) a read cycle with no wait state, (d) a write cycle with wait states. This bus operates in a similar fashion to IPbus or Wishbone, but with narrower address and data busses.
 
 
-\section{Timing diagrams}
+%\section{Timing diagrams}
 
-\includegraphics[width=1\textwidth]{dts_endpoint_timing_diagram.png}
+\begin{figure}[p]
+  \includegraphics[width=1\textwidth]{dts_endpoint_startup_timing.pdf}% Generated from JSON file with Wavedrom
+  \caption{Endpoint startup timing}
+  \label{fig:endpoint_startup_timing}
+\end{figure}
+
+\begin{figure}[p]
+  \includegraphics[width=1\textwidth]{dts_endpoint_ctrl_bus_timing.pdf}% Generated from JSON file with Wavedrom
+  \caption{Endpoint control bus timing}
+  \label{fig:endpoint_bus_timing}
+\end{figure}
+
+
+%\includegraphics[width=1\textwidth]{dts_endpoint_timing_diagram.png}
 
 
 \section{Register map}
@@ -304,6 +317,8 @@ p{\dimexpr 0.443\linewidth-2\tabcolsep-\arrayrulewidth}|} \hline
 0x76          &        & err\_cnt & rw & Count of soft protocol errors; write to register clears \\\cline{1-1}\cline{3-5}
 0x77          &        & version & ro & Endpoint version \\\hline 
 \end{tabularx}
+  \caption{Endpoint control bus address map}
+  \label{tab:endpoint_ctrl_bus_addr_map}
 \end{table}
 
 \end{document}
