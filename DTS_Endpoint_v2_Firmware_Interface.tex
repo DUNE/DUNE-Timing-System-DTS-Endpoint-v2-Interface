@@ -26,12 +26,13 @@
 \usepackage{ulem} 
 \usepackage[english]{babel}
 \usepackage{minted}
+\usepackage{float}
 
 \begin{document}
-\title{DUNE Timing System (DTS) Endpoint v2 Interface}
+\title{DUNE Timing System (DTS) Endpoint v2 Interface \\\url{https://edms.cern.ch/document/2395364} }
 
-\author{DMN}
-\date{2022-02-23\\\normalsize Document version v3}
+\author{D.M.Newbold}
+\date{2022-06-29\\\normalsize Document version v5}
 
 \maketitle
 \newpage
@@ -47,7 +48,7 @@ entity pdts_endpoint is
         EXT_PLL_DIV: positive := 1;
         FORCE_TX: boolean := false;
         SKIP_FREQ: boolean := false;
-        SKIP_ADDR: boolean := false;
+        EXT_ADDR: boolean := true;
         SKIP_DESKEW: boolean := false;
         SKIP_TSTAMP: boolean := false;
     );
@@ -58,7 +59,7 @@ entity pdts_endpoint is
         sys_ctrl_in: in pdts_cmo := PDTS_CMO_NULL;
         sys_ctrl_out: out pdts_cmi;
         stat: out std_logic_vector(3 downto 0);
-    ctrl_out: out pdts_cmo;
+        ctrl_out: out pdts_cmo;
         ctrl_in: in pdts_cmi := PDTS_CMI_NULL;
         pll_clko: out std_logic;
         pll_clki: in std_logic := '0';
@@ -68,6 +69,8 @@ entity pdts_endpoint is
         txenb: out std_logic;
         clk: out std_logic;
         rst: out std_logic;
+        clk2x: out std_logic;
+        clk4x: out std_logic;
         ready: out std_logic;
         tstamp: out std_logic_vector(63 downto 0);
         sync: out std_logic_vector(3 downto 0);
@@ -140,9 +143,11 @@ The names in parenthesis indicate the direction and clock domain of each signal.
 
 \textbf{sync} (out, clk): Timing command output to external decoder and / or host firmware. The meaning of individual timing commands is defined as part of the overall DUNE partitioning scheme.
 
-\textbf{sync\_stb} (out, clk): TIming command strobe, asserted for one cycle when \textbf{sync} is valid.
+\textbf{sync\_stb} (out, clk): Timing command strobe, asserted for one cycle when \textbf{sync} is valid.
 
 \section{Endpoint Generics}
+
+
 
 \textbf{SCLK\_FREQ}: Frequency of system clock \textbf{sys\_clk} in MHz.
 
@@ -154,7 +159,7 @@ The names in parenthesis indicate the direction and clock domain of each signal.
 
 \textbf{SKIP\_FREQ}: Causes the frequency check step (see below) to be skipped; useful for simulation.
 
-\textbf{SKIP\_ADDR}: Prevents the endpoint waiting for register settings for address; useful for simulation or testing, or where the address is permanently fixed via the \textbf{sys\_addr} port.
+\textbf{EXT\_ADDR}: Causes endpoint to use the address configured via the \textbf{sys\_addr} port; otherwise, the endpoint uses the address set in the \textbf{addr} registers.
 
 \textbf{SKIP\_DESKEW}: Prevents the endpoint waiting for register settings for deskew; useful for simulation or testing.
 
@@ -164,17 +169,18 @@ The names in parenthesis indicate the direction and clock domain of each signal.
 
 The endpoint state machine proceeds through the following states:
 
+
 \textbf{ST\_RESET} (0x0): Held in reset by an asserted \textbf{sys\_rst} signal.
 
-\textbf{ST\_W\_SIG} (0x1): Waiting for \textbf{los} to be deasserted.
+\textbf{ST\_W\_CLK} (0x1): Waiting for the (optional) external and internal PLLs to lock. \textbf{rst} is deasserted after this step.
 
-\textbf{ST\_W\_CLK} (0x2): Waiting for the (optional) external and internal PLLs to lock. \textbf{rst} is deasserted after this step.
+\textbf{ST\_W\_FREQ} (0x2): Conducting a measurement of the frequency of the recovered clock; the clock frequency must be within \textasciitilde{}1000ppm of the nominal value to pass this step. This typically takes \textasciitilde{}1ms in real time, and can optionally be skipped.
 
-\textbf{ST\_W\_FREQ} (0x3): Conducting a measurement of the frequency of the recovered clock; the clock frequency must be within \textasciitilde{}3000ppm of the nominal value to pass this step. This typically takes \textasciitilde{}1ms in real time, and can optionally be skipped.
+\textbf{ST\_W\_CDR} (0x3): Waiting for the data recovery block to lock. This typically takes \textasciitilde{}8ms in real time.
 
-\textbf{ST\_W\_CDR} (0x4): Waiting for the data recovery block to lock. This typically takes \textasciitilde{}8ms in real time.
+\textbf{ST\_W\_RX} (0x4): Waiting for comma alignment.
 
-\textbf{ST\_W\_RX} (0x5): Waiting for comma alignment.
+\textbf{ST\_W\_ADDR} (0x5): Waiting for address to be set if \textbf{EXT\_ADDR} generic is false..
 
 \textbf{ST\_W\_SETUP} (0x6): Waiting for register settings (for address and deskew). This can optionally be skipped.
 
@@ -188,37 +194,9 @@ The endpoint state machine proceeds through the following states:
 
 \textbf{ST\_ERR\_T} (0xe): Mis-alignment of the local and system timestamp has been detected.
 
+\textbf{ST\_ERR\_X} (0xf): An error in an incoming control packet has been detected.
+
 In any of the error states, \textbf{ready} is deasserted and \textbf{rst} may be asserted if clock lock is lost. These states persist until the endpoint is reset via assertion of \textbf{sys\_rst} or via the control bus.
-
-\section{Command Decoder Block}
-
-The command decoder offers optional additional functionality for host firmware that needs to receive trigger, calibration or alignment commands via the timing system. The decoder recognises up to eight of the available 256 timing commands, and asserts one of eight one-hot decoded outputs when one of these eight is received. The mapping of timing commands to outputs is configurable either by the local system or by the timing master.
-
-This allows the host system to flexibly use any combination of broadcast commands and commands directed to specific groups of hardware. The meaning of specific commands is not fixed, except in three cases:
-\begin{itemize}
-\item 0x0: \textbf{ts\_sync}, used internally within the timing system for timestamp broadcast. This signal is asserted exactly once per second, and can be used by the user firmware for other purposes if needed (e.g. alignment of ADC divided clocks between boards).
-\item 0x1: \textbf{echo}, used internally within the timing system for timing delay calibration.
-\item 0xff: \textbf{reserved\_0xff}, is never sent and should not be used by user firmware.
-\end{itemize}
-The host firmware may also decode the timing commands internally if required, noting that timing commands are not valid until \textbf{ready} is asserted.
-
-\subsection{VHDL Entity Declaration of Decoder Interface}
-
-\begin{minted}{vhdl}
-entity pdts_ep_decoder is
-    port(
-        clk: in std_logic;
-        rst: in std_logic;
-        ctrl_in: in pdts_cmo;
-        ctrl_out: out pdts_cmi;
-        sync: in std_logic_vector(7 downto 0);
-        sync_stb: in std_logic;
-        cmd: out std_logic_vector(7 downto 0)
-    );
-
-end pdts_ep_decoder;
-\end{minted}
-
 
 \section{Control bus}
 
@@ -268,14 +246,46 @@ A simple two-stage handshake is used between master and slave:
 \item The master may begin another transaction on the cycle following the assertion of ack.
 \end{itemize}
 
-\textbf{stb} must be asserted until \textbf{ack} is asserted, and de-asserted on the cycle following this unless a new transaction is begun. Slaves are allowed to permanently assert \textbf{ack} if it is guaranteed that all read and write operations are completed in a single cycle. Address decoding and slave return data mutiplexing is the responsibility of the host firmware if the control bus is used. A timing diagram is shown below, illustrating four successive transactions: (a) a read cycle with wait states, (b) a write cycle with no wait state, (c) a read cycle with no wait state, (d) a write cycle with wait states. This bus operates in a similar fashion to IPbus or Wishbone, but with narrower address and data busses.
+\textbf{stb} must be asserted until \textbf{ack} is asserted, and de-asserted on the cycle following this unless a new transaction is begun. Slaves are allowed to permanently assert \textbf{ack} if it is guaranteed that all read and write operations are completed in a single cycle. Address decoding and slave return data mutiplexing is the responsibility of the host firmware if the control bus is used. Figure \ref{fig:endpoint_bus_timing} shows the timing diagram for the control bus, illustrating four successive transactions: (a) a read cycle with wait states, (b) a write cycle with no wait state, (c) a read cycle with no wait state, (d) a write cycle with wait states. This bus operates in a similar fashion to IPbus or Wishbone, but with narrower address and data busses. Table \ref{tab:endpoint_ctrl_bus_addr_map} lists the address map of the registers available on the control bus.
+
+
+\section{Command Decoder Block}
+
+The command decoder provides the functionality the host firmware needs to receive commands via the timing system. The decoder recognises up to eight of the available 256 timing commands, and asserts one of eight one-hot decoded outputs when one of these eight is received. The mapping of timing commands to outputs is configurable either by the local system or by the timing master.
+
+This allows the host system to flexibly use any combination of broadcast commands and commands directed to specific groups of hardware. The meaning of specific commands is not fixed, except in three cases:
+\begin{itemize}
+\item 0x0: \textbf{ts\_sync}, used internally within the timing system for timestamp broadcast. This signal is asserted exactly once per second, and can be used by the user firmware for other purposes if needed (e.g. alignment of ADC divided clocks between boards).
+\item 0x1: \textbf{echo}, used internally within the timing system for timing delay calibration.
+\item 0xff: \textbf{reserved\_0xff}, is never sent and should not be used by user firmware.
+\end{itemize}
+The host firmware may also decode the timing commands internally if required, noting that timing commands are not valid until \textbf{ready} is asserted. Figure \ref{fig:endpoint_startup_timing} illustrates the timing of the command decoder signals.
+
+\subsection{VHDL Entity Declaration of Decoder Interface}
+
+\begin{minted}{vhdl}
+entity pdts_ep_decoder is
+    port(
+        clk: in std_logic;
+        rst: in std_logic;
+        ctrl_in: in pdts_cmo;
+        ctrl_out: out pdts_cmi;
+        sync: in std_logic_vector(7 downto 0);
+        sync_stb: in std_logic;
+        cmd: out std_logic_vector(7 downto 0)
+    );
+
+end pdts_ep_decoder;
+\end{minted}
+
+
 
 
 %\section{Timing diagrams}
 
 \begin{figure}[p]
   \includegraphics[width=1\textwidth]{dts_endpoint_startup_timing.pdf}% Generated from JSON file with Wavedrom
-  \caption{Endpoint startup timing}
+  \caption{Endpoint decoder timing}
   \label{fig:endpoint_startup_timing}
 \end{figure}
 
@@ -290,15 +300,16 @@ A simple two-stage handshake is used between master and slave:
 
 
 \section{Register map}
+\label{sect:reg_map}
 
-\begin{table}[h!]
+\begin{table}[H]
 %\begin{tabularx}{\textwidth}{|l|l|l|l|l|} \hline 
 \begin{tabularx}{\textwidth}{|
-p{\dimexpr 0.096\linewidth-2\tabcolsep-2\arrayrulewidth}|
-p{\dimexpr 0.239\linewidth-2\tabcolsep-\arrayrulewidth}|
+p{\dimexpr 0.12\linewidth-2\tabcolsep-2\arrayrulewidth}|
+p{\dimexpr 0.22\linewidth-2\tabcolsep-\arrayrulewidth}|
 p{\dimexpr 0.141\linewidth-2\tabcolsep-\arrayrulewidth}|
 p{\dimexpr 0.08\linewidth-2\tabcolsep-\arrayrulewidth}|
-p{\dimexpr 0.443\linewidth-2\tabcolsep-\arrayrulewidth}|} \hline
+p{\dimexpr 0.46\linewidth-2\tabcolsep-\arrayrulewidth}|} \hline
 \textbf{Addr} & \textbf{Decoding block} & \textbf{Name} & \textbf{RW} & \textbf{Content} \\\hline 
 0x00 - 0x5f   & User firmware           &               &               & User registers \\\hline 
 0x60          & \multirow{8}{=}{Command decoder}  & tcmd\_0 & rw & \multirow{8}{=}{Trigger decoder commands \#0 - \#7}  \\\cline{1-1}\cline{3-4}
@@ -309,13 +320,20 @@ p{\dimexpr 0.443\linewidth-2\tabcolsep-\arrayrulewidth}|} \hline
 0x65          &                         & tcmd\_5 & rw &  \\\cline{1-1}\cline{3-4}
 0x66          &                         & tcmd\_6 & rw &  \\\cline{1-1}\cline{3-4}
 0x67          &                         & tcmd\_7 & rw &  \\\hline 
-0x68 - 0x6f   & Timestamp               & tstamp & rw & Timestamp set / check value \\\hline 
-0x70          & \multirow{6}{=}{Endpoint}  & ctrl & rw & b0 rx reset (restarts lock process, does not clear registers) \newline b1 address set flag \newline b2 deskew set flag \newline b3 update clock phase \newline b7 hard reset (clears registers) \\\cline{1-1}\cline{3-5}
-0x71          &        & stat & ro & b3:0 endpoint status word \newline b4 clock phase update complete \\\cline{1-1}\cline{3-5}
+0x70          & \multirow{6}{=}{Endpoint}  & cmd & wo & Bit-mapped command register:\newline\newline
+b0: disable tx\newline
+b1: enable tx\newline
+b2: set address\newline
+b3: set coarse delay\newline
+b4: resync (restarts lock process)\newline
+b5: reset (clears registers)
+ \\\cline{1-1}\cline{3-5}
+0x71          &        & stat & ro & b3:0 endpoint status word \newline b4: clock phase update complete \newline b5: transmitter enabled\\\cline{1-1}\cline{3-5}
 0x72 - 0x73   &        & deskew & rw & b3:0 coarse delay \newline b15:4 clock phase (i.e. fine delay) \\\cline{1-1}\cline{3-5}
 0x74 - 0x75   &        & addr & rw & Endpoint address \\\cline{1-1}\cline{3-5}
-0x76          &        & err\_cnt & rw & Count of soft protocol errors; write to register clears \\\cline{1-1}\cline{3-5}
-0x77          &        & version & ro & Endpoint version \\\hline 
+0x76          &        & err\_cnt & rw & Count of soft protocol errors; writing to register zeros it \\\cline{1-1}\cline{3-5}
+0x77          &        & tstamp & rw & Timestamp set / check value (fifo) \\\cline{1-1}\cline{3-5}
+0x7b - 0x78   &        & version & ro & Endpoint version \\\hline 
 \end{tabularx}
   \caption{Endpoint control bus address map}
   \label{tab:endpoint_ctrl_bus_addr_map}
