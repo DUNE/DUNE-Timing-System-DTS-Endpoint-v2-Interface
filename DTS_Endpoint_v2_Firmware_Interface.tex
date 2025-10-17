@@ -8,7 +8,13 @@
 % docx2tex 1.7.3 --- ``Just out of this Word.'' 
 % https://github.com/transpect/docx2tex 
 %  
-\documentclass{article} 
+\documentclass[fleqn,12pt,a4paper]{olplainarticle}
+
+\usepackage{vhistory}
+\usepackage{setspace}
+\usepackage{etoolbox}
+\usepackage{array}
+
 \usepackage[T1]{fontenc} 
 \usepackage[utf8]{inputenc} 
 \usepackage{graphicx}
@@ -28,17 +34,62 @@
 \usepackage{minted}
 \usepackage{float}
 
-\begin{document}
-\title{DUNE Timing System (DTS) Endpoint v2 Interface \\\url{https://edms.cern.ch/document/2395364} }
+\pdfpageheight=\paperheight
+\pdfpagewidth=\paperwidth
+\setlength\oddsidemargin{\dimexpr(\paperwidth-\textwidth)/2 - 1in\relax}
+\setlength\evensidemargin{\oddsidemargin}
 
-\author{D.M.Newbold}
-\date{2022-06-29\\\normalsize Document version v5}
+
+\title{DUNE Timing System (DTS) Endpoint v2 Interface }
+
+\author[1]{D.M.Newbold}
+\affil[1]{H.H. Wills Physics Laboratory, Bristol, UK}
+
+%\date{2022-06-29\\\normalsize Document version v5}
+
+\begin{document}
+
+\keywords{DUNE,Timing System,Firmware}
+
+\begin{abstract}
+    This document describes the interface to the endpoint firmware for the DUNE/DCSK Timing System (DTS).
+
+    \textsc{document source:}\\
+    {\bf EDMS:} \hyperlink{https://edms.cern.ch/document/2395364}{2395364} \\
+    {\bf Overleaf:}  \url{https://www.overleaf.com/read/mcbbkqmscthd#bac917}
+    
+\end{abstract}
+
+\flushbottom
 
 \maketitle
+
+\begin{versionhistory}
+  \vhEntry{v1 - v5}{09/June/22}{DMN}{created}
+  \vhEntry{v6}{17/Oct/25}{DGC}{Ported from Google Document to LateX. Minor edits.}
+\end{versionhistory}
+
 \newpage
+
+\section{Introduction}
+
+The DTS endpoint is a common firmware block to be used by all DUNE readout systems connected to the timing system. It provides the following functionality:
+\begin{itemize}
+\item Recovery of the DUNE 62.5MHz clock and DTS packet data from the Duty Cycle Shift Keyed(DCSK) timing signal.
+\item Deskewing of clock and timing signals to \textasciitilde{}ns precision across all readout systems
+\item Generation of the common DUNE 64b timestamp
+\item Reception and decoding of timing alignment and command signals
+\item Transmission of status and alignment information back to the timing master
+\item Provision of status and debugging information to the host firmware
+\item Read-write ‘out of band’ access to registers in the host firmware
+\end{itemize}
+The DTS is implemented in VHDL, and can be integrated into host firmware as source files or as a packaged IP block. In the former case, the VHDL package \texttt{pdts\_ep\_defs.vhd} provides the definitions of the necessary types and constants for the interface.
+
+The DTS code is validated for Xilinx 7-series, Ultrascale and Ultrascale+ architectures. This document should be read alongside the ‘timing endpoint integration guide’, which gives tips on use and debugging.
+
 \section{VHDL Declaration of Endpoint Interface}
 \begin{minted}{vhdl}
-  use work.pdts_ep_defs.all;
+use work.pdts_ep_defs.all;
 
 entity pdts_endpoint is
     generic(
@@ -83,23 +134,6 @@ entity pdts_endpoint is
 \section{Block Diagram of Endpoint and Host Firmware}
 
 \includegraphics[width=1\textwidth]{endpoint_structure.pdf}
-
-
-\section{General Notes}
-
-The DTS endpoint is a common firmware block to be used by all DUNE readout systems connected to the timing system. It provides the following functionality:
-\begin{itemize}
-\item Recovery of the DUNE 62.5MHz clock and DTS packet data from the timing signal
-\item Deskewing of clock and timing signals to \textasciitilde{}ns precision across all readout systems
-\item Generation of the common DUNE 64b timestamp
-\item Reception and decoding of timing alignment and command signals
-\item Transmission of status and alignment information back to the timing master
-\item Provision of status and debugging information to the host firmware
-\item Read-write ‘out of band’ access to registers in the host firmware
-\end{itemize}
-The DTS is implemented in VHDL, and can be integrated into host firmware as source files or as a packaged IP block. In the former case, the VHDL package \texttt{pdts\_ep\_defs.vhd} provides the definitions of the necessary types and constants for the interface.
-
-The DTS code is validated for Xilinx 7-series, Ultrascale and Ultrascale+ architectures. This document should be read alongside the ‘timing endpoint integration guide’, which gives tips on use and debugging.
 
 \section{Endpoint Interface Signals}
 
